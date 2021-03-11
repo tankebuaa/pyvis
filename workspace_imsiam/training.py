@@ -64,14 +64,11 @@ def run(rank, size, seed=None):
     coco_train = MSCOCO(name='train2017',
                          root='../../Datasets/coco/images',
                          anno='../../Datasets/coco/annotations')
-
-
-    got10k_test = Got10k(name="test", root=root + 'got10k/', anno='got10k-toolkit-master/got10k/', frame_range=50)
     
     train_dataset = TrkDataset([vid_train, got10k_train, lasot_train, coco_train],
                                p_datasets=[1, 1, 1, 2],
                                samples_per_epoch=4000 * 80) # (4345, 9335, 1120, 849949)
-    val_dataset = TrkDataset([got10k_test, ], samples_per_epoch=4000)
+    val_dataset = TrkDataset([got10k_train, ], samples_per_epoch=4000)
 
     # dist dataset
     if size > 0:
