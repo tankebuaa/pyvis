@@ -13,12 +13,13 @@ from config import basi_cfg as cfg
 
 
 class WeightLoss(nn.Module):
-    def __init__(self, weight=1.0, num_tasks=3):
+    def __init__(self, weight=1.0, factor=torch.ones(3)):
         super(WeightLoss, self).__init__()
-        self.weights = nn.Parameter(torch.tensor([weight for _ in range(num_tasks)], dtype=torch.float32), requires_grad=True)
+        self.weights = nn.Parameter(torch.tensor([weight for _ in range(len(factor))], dtype=torch.float32), requires_grad=True)
+        self.factor = factor.cuda()
 
     def forward(self, x):
-        loss = 0.5 * torch.sum(x / (self.weights**2)) + torch.log(torch.prod(1 + self.weights**2))
+        loss = torch.sum(x / (self.factor * self.weights**2)) + torch.log(torch.prod(1 + self.weights**2))
         return loss
 
 
@@ -38,7 +39,7 @@ class BsiModelBuilder(BaseBuilder):
         self.iou_head = AtomIoUNet(input_dim=(512, 1024), pred_input_dim=(256, 256),
                                    pred_inter_dim=(256,256))
         # multi-task weight
-        self.lossweights = WeightLoss(weight=1.0, num_tasks=3)
+        self.lossweights = WeightLoss(weight=1.0, , factor=torch.tensor([1,1,2],dtype=torch.float32))
 
     def forward(self, data):
         # only used for training
