@@ -12,7 +12,6 @@ class TrackerConfig(object):
         self.CONTEXT_AMOUNT = 0.5
         self.EXEMPLAR_SIZE = 127
         self.INSTANCE_SIZE = 255
-        self.PENALTY_K = 0.0
 
         # OTB 0.45,0.35
         self.WINDOW_INFLUENCE = 0.45

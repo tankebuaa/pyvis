@@ -135,8 +135,7 @@ class IMSiamTracker(BaseTracker):
             cen = self._convert_sigmoid(cen)
             reg = reg.squeeze().cpu().numpy()
             iou = self._convert_sigmoid(iou)
-            # penalty = self.cal_penalty(reg, cfg.PENALTY_K)
-            cls = cls  * cen # * iou# * penalty
+            cls = cls  * cen  * iou
             score_cls.append(cls[np.newaxis, :])
             regs.append(reg[np.newaxis, :])
         cls_raw = np.mean(score_cls, axis=0).squeeze()
@@ -183,14 +182,6 @@ class IMSiamTracker(BaseTracker):
     def _convert_sigmoid(selfself, score):
         score = torch.sigmoid(score).squeeze().cpu().numpy()
         return score
-
-    def cal_penalty(self, ltrbs, penalty_lk):
-        bboxes_w = ltrbs[0, :, :] + ltrbs[2, :, :]
-        bboxes_h = ltrbs[1, :, :] + ltrbs[3, :, :]
-        s_c = self.change(self.sz(bboxes_w, bboxes_h) / self.sz(self.size[0]*self.scale_z, self.size[1]*self.scale_z))
-        r_c = self.change((self.size[0] / self.size[1]) / (bboxes_w / bboxes_h))
-        penalty = np.exp(-(r_c * s_c - 1) * penalty_lk)
-        return penalty
 
     def sz(self, w, h):
         pad = (w + h) * 0.5
