@@ -1,7 +1,8 @@
 import numpy as np
 import cv2
-
+from utils.preprocessing import to_pil_image
 from utils.opbox import center2corner, Center, corner2center, Corner
+import random
 
 
 class Augmentation:
@@ -19,7 +20,7 @@ class Augmentation:
 
     @staticmethod
     def random():
-        return np.random.random() * 2 - 1.0
+        return random.random() * 2 - 1.0
 
     def _crop_roi(self, image, bbox, out_sz, padding=(0, 0, 0)):
         bbox = [float(x) for x in bbox]
@@ -37,10 +38,10 @@ class Augmentation:
     def _blur_aug(self, image):
         def rand_kernel():
             sizes = np.arange(5, 46, 2)
-            size = np.random.choice(sizes)
+            size = random.choice(sizes)
             kernel = np.zeros((size, size))
             c = int(size/2)
-            wx = np.random.random()
+            wx = random.random()
             kernel[:, c] += 1. / size * wx
             kernel[c, :] += 1. / size * (1-wx)
             return kernel
@@ -112,21 +113,100 @@ class Augmentation:
         crop_bbox = center2corner(Center(shape[0]//2, shape[1]//2,
                                          size-1, size-1))
         # gray augmentation
-        if self.gray > np.random.random():
+        if self.gray > random.random():
             image = self._gray_aug(image)
 
         # shift scale augmentation
         image, bbox = self._shift_scale_aug(image, bbox, crop_bbox, size)
 
         # color augmentation
-        if self.color > np.random.random():
+        if self.color > random.random():
             image = self._color_aug(image)
 
         # blur augmentation
-        if self.blur > np.random.random():
+        if self.blur > random.random():
             image = self._blur_aug(image)
 
         # flip augmentation
-        if self.flip and self.flip > np.random.random():
+        if self.flip and self.flip > random.random():
             image, bbox = self._flip_aug(image, bbox)
+        return image, bbox
+
+
+class SSFAugument:
+    """
+    Scale-Shift-Flip Augumentation(SSFAugment)
+    """
+    def __init__(self, shift=0, scale=0.1, flip=0.2):
+        self.shift = shift
+        self.scale = scale
+        self.flip = flip
+
+    @staticmethod
+    def random():
+        return random.random() * 2 - 1.0
+
+    def __call__(self, image, bbox, base_size, outsize, mode='padding'): # bbox:[x,y,w,h]
+        # shift scale augmentation
+        image, bbox = self._shift_scale_aug(image, bbox, base_size, outsize, mode)
+        if self.flip and self.flip > random.random():
+            flip = 1
+            image, bbox = self._flip_aug(image, bbox, outsize)
+        else:
+            flip = 0
+
+        rect = [bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]]
+        return image, rect, flip  # rect [x1, y1, x2, y2]
+
+    def _shift_scale_aug(self, image, bbox, size, output_size, mode='padding'): # in box:[x,y,w,h]
+        im_h, im_w = image.shape[:2]
+        x, y, w, h = bbox
+        cx = x + w / 2
+        cy = y + h / 2
+
+        if self.scale:  # scale the bounding box
+            scale_x = (1.0 + Augmentation.random() * self.scale)
+            scale_y = (1.0 + Augmentation.random() * self.scale)
+            scale_x = min(scale_x, float(im_w) / w)
+            scale_y = min(scale_y, float(im_h) / h)
+            w = w * scale_x
+            h = h * scale_y
+        # scale the full image to base patch: s = origin / norm
+        if mode is 'padding':
+            L = np.sqrt((w + (w + h) / 2) * (h + (w + h) / 2))
+        else:
+            L = 2 * np.sqrt(w * h)
+        scale = size / L
+
+        if self.shift:
+            sx = Augmentation.random() * self.shift / scale
+            sy = Augmentation.random() * self.shift / scale
+            ncx, ncy = cx + sx, cy + sy
+        # crop the patch
+        expand = output_size / size
+        crop_bbox = [ncx - expand * L / 2, ncy - expand * L / 2, ncx + expand * L / 2, ncy + expand * L / 2]
+        avg_chans = np.mean(image, axis=(0, 1))
+        image = self._crop_roi(image, crop_bbox, output_size, padding=avg_chans)
+        # ground truth box in cropped image
+        gcx, gcy = output_size / 2 - sx * scale, output_size / 2 - sy * scale
+        gw, gh = w / scale_x * scale, h / scale_y * scale
+        gt_box =list(map(int, [gcx - gw / 2, gcy - gh / 2, gw, gh]))
+        return image, gt_box
+
+    def _crop_roi(self, image, bbox, out_sz, padding=(0, 0, 0)):
+        bbox = [float(x) for x in bbox]
+        a = (out_sz-1) / (bbox[2]-bbox[0])
+        b = (out_sz-1) / (bbox[3]-bbox[1])
+        c = -a * bbox[0]
+        d = -b * bbox[1]
+        mapping = np.array([[a, 0, c],
+                            [0, b, d]]).astype(np.float)
+        crop = cv2.warpAffine(image, mapping, (out_sz, out_sz),
+                              borderMode=cv2.BORDER_CONSTANT,
+                              borderValue=padding)
+        return crop
+
+    def _flip_aug(self, image, bbox, size):
+        image = cv2.flip(image, 1)
+        bbox = [size - 1 - bbox[0] - bbox[2], bbox[1], bbox[2], bbox[3]]
         return image, bbox

@@ -67,8 +67,8 @@ class GradualWarmupScheduler(_LRScheduler):
 
 
 if __name__ == '__main__':
-    model = [{'params':torch.nn.Parameter(torch.randn(2, 2, requires_grad=True)), 'lr':5e-4},
-             {'params':torch.nn.Parameter(torch.randn(2, 2, requires_grad=True)), 'lr':5e-3}]
+    model = [{'params':torch.nn.Parameter(torch.randn(2, 2, requires_grad=True)), 'lr':2e-3},
+             {'params':torch.nn.Parameter(torch.randn(2, 2, requires_grad=True)), 'lr':2e-2}]
     optim = SGD(model, 0.1)
 
     # scheduler_warmup is chained with schduler_steplr
