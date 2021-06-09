@@ -88,3 +88,11 @@ class ManHead(nn.Module):
         cls = torch.sum(dw_cls, dim=1, keepdim=True)
         cls = self.BN(cls)
         return dw_cls, cls
+
+    def track(self, kernel, x):
+        """
+        group conv2d to calculate cross correlation, fast version
+        """
+        cls = F.conv2d(x, kernel)
+        cls = self.BN(cls)
+        return cls

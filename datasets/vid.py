@@ -1,10 +1,8 @@
 import os
 import xml.etree.ElementTree as ET
 import json
-import csv
 import numpy as np
-import glob
-from utils.load_text import load_text
+import random
 
 
 class ImagenetVID(object):
@@ -44,13 +42,13 @@ class ImagenetVID(object):
 
     def get_random_target(self, index=-1):
         if index == -1:
-            index = np.random.randint(0, self.num)
+            index = random.randint(0, self.num-1)
         video = self.sequence_list[index]
         start = video['start_frame']
         end = start + len(video['anno'])
-        frame = np.random.randint(start, end)
+        frame = random.randint(start, end-1)
         while not video['target_visible'][frame - start]:
-            frame = np.random.randint(start, end)
+            frame = random.randint(start, end-1)
         image_path, image_anno = self.get_image_anno(video, frame, frame - start)
         return image_path, image_anno
 
@@ -69,15 +67,15 @@ class ImagenetVID(object):
         start = video['start_frame']
         end = start + len(video['anno'])
 
-        template_frame = np.random.randint(start, end)
+        template_frame = random.randint(start, end-1)
         while not video['target_visible'][template_frame - start]:
-            template_frame = np.random.randint(start, end)
+            template_frame = random.randint(start, end-1)
 
         left = max(template_frame - self.frame_range, start)
         right = min(template_frame + self.frame_range, end-1) + 1
-        search_frame = np.random.randint(left, right)
+        search_frame = random.randint(left, right-1)
         while not video['target_visible'][search_frame - start]:
-            search_frame = np.random.randint(left, right)
+            search_frame = random.randint(left, right-1)
 
         return self.get_image_anno(video, template_frame, template_frame-start), \
             self.get_image_anno(video, search_frame, search_frame-start)
@@ -141,6 +139,16 @@ class ImagenetVID(object):
                     all_sequences.append(new_sequence)
         return all_sequences
 
+    def __getitem__(self, item):
+        video = self.sequence_list[item]
+        start = video['start_frame']
+        end = start + len(video['anno'])
+        frame = random.randint(start, end-1)
+        while not video['target_visible'][frame - start]:
+            frame = random.randint(start, end-1)
+        image_path, image_anno = self.get_image_anno(video, frame, frame - start)
+        return image_path, image_anno
+
 
 
 if __name__ == "__main__":
@@ -148,6 +156,7 @@ if __name__ == "__main__":
                       root='../../Datasets/ILSVRC2015/Data/VID',
                       anno='../../Datasets/ILSVRC2015/Annotations/VID',
                       frame_range=50)
+    out = otb_dataset[0]
     out1 = otb_dataset.get_random_target()
     out2 = otb_dataset.get_positive_pair(30)
     for i in range(1000000000):

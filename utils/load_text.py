@@ -26,7 +26,6 @@ def load_text_pandas(path, delimiter, dtype):
                 return ground_truth_rect
             except Exception as e:
                 pass
-
         raise Exception('Could not read file {}'.format(path))
     else:
         ground_truth_rect = pd.read_csv(path, delimiter=delimiter, header=None, dtype=dtype, na_filter=False,

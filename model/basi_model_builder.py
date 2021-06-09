@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from model.base_builder import BaseBuilder
 import model.backbone.resnet as res
-import model.backbone.lenet as google
+import model.backbone.googlenet as google
 from model.neck import FpnLayer, PAFPN
 from model.head import BasiHead, ClsHead, RegHead, xcorr_fast, xcorr_depthwise
 from model.loss.loss import weight_l2_loss
@@ -36,10 +36,24 @@ class BsiModelBuilder(BaseBuilder):
 
         self.cls_head = ClsHead(256)
         self.reg_head = RegHead(256)
+
+        # # build google lenet, neck and head
+        # layer1 = ['conv1', 'maxpool1', 'conv2', 'conv3']
+        # layer2 = ['maxpool2', 'inception3a', 'inception3b']
+        # layer3 = ['maxpool3', 'inception4a', 'inception4b', 'inception4c', 'inception4d', 'inception4e']
+        # self.backbone = google.LeNet(output_layers=['layer2', 'layer3'], pretrained=True,
+        #                              frozen_layers=layer1, activate_layers=layer2+layer3)  # 480, 832, 256
+        # self.cls_neck = FpnLayer(480, 832, 256)
+        # self.reg_neck = FpnLayer(480, 832, 256)
+        #
+        # self.cls_head = ClsHead(256)
+        # self.reg_head = ClsHead(256)
+
+        # self.iou_head = IoUNet(input_dim=512, pred_input_dim=256, pred_inter_dim=256)
         self.iou_head = AtomIoUNet(input_dim=(512, 1024), pred_input_dim=(256, 256),
                                    pred_inter_dim=(256,256))
         # multi-task weight
-        self.lossweights = WeightLoss(weight=1.0, , factor=torch.tensor([1,1,2],dtype=torch.float32))
+        self.lossweights = WeightLoss(weight=1.0, factor=torch.tensor([1,1,2],dtype=torch.float32))
 
     def forward(self, data):
         # only used for training
@@ -70,6 +84,10 @@ class BsiModelBuilder(BaseBuilder):
         iou_pred = self.iou_head([z['layer2'], z['layer3']], [x['layer2'], x['layer3']],
                                  template_box.unsqueeze(0), test_proposals.unsqueeze(0))
 
+        # zf = self.neck(z['layer2'], z['layer3'])
+        # xf = self.neck(x['layer2'], x['layer3'])
+        # cls, bbox_reg, iou_pred = self.head(zf, xf, template_box, test_proposals)
+
         loss_cls = F.binary_cross_entropy_with_logits(cls, cls_label, weight=cls_weights)
 
         flatten_reg_weights = reg_weights.view(-1, 1)  # (num_all)
@@ -86,6 +104,7 @@ class BsiModelBuilder(BaseBuilder):
 
         loss_iou = weight_l2_loss(iou_pred.reshape(-1, iou_pred.shape[-1]), iou_label, weight_iou)
         loss = self.lossweights(torch.cat([loss_cls.unsqueeze(0), loss_reg.unsqueeze(0), loss_iou.unsqueeze(0)]))
+        # loss = loss_cls + loss_reg + loss_iou
 
         outputs = {'total_loss': loss,
                    'cls_loss': loss_cls,
@@ -102,6 +121,8 @@ class BsiModelBuilder(BaseBuilder):
         zf_cls = self.cls_neck(z['layer2'], z['layer3'])
         zf_cls = self.cls_head.extract_clsfeat(zf_cls)
         # TODO: background supress in template
+        # self.spatial_atten = torch.softmax(torch.sum(self.zf_cls, dim=1).reshape(1, -1), dim=1) \
+        #     .reshape(1, 1, self.zf_cls.size(2), self.zf_cls.size(3))
         if cfg.MASK:
             L = zf_cls.shape[-1]
             mh = min(torch.round(bbox[0,3] / 16).int() * 2, L)
@@ -133,6 +154,7 @@ class BsiModelBuilder(BaseBuilder):
 
         """IoUNet"""
         self.iou_modulation = self.iou_head.get_modulation([z['layer2'], z['layer3']], bbox)
+        # self.iou_modulation = self.iou_head.get_modulation(zf, bbox)
 
     def track(self, img, visdom=None):
         # get search feature maps
@@ -144,7 +166,8 @@ class BsiModelBuilder(BaseBuilder):
         if weight is None:
             self.salient_weight = self.salient_weight * (1.0 - 0.5 * self.target_weight.view(1, -1, 1, 1))
             return
-        x = torch.sum(weight, dim=0) * (1.0 - 0.7 * self.target_weight)
+        x = torch.sum(weight, dim=0)
+        x = x * (1.0 - 0.7 * self.target_weight)
         w = (1 - cfg.ALPHA) * self.salient_weight + cfg.ALPHA * x.view(1, -1, 1, 1)/(torch.sum(x, dtype=torch.float32) + 1e-16)
         self.salient_weight = w / (w.sum() + 1e-16)
 
@@ -182,6 +205,10 @@ class BsiModelBuilder(BaseBuilder):
 
     def predict_iou(self, boxes):
         output_boxes = boxes.view(1, -1, 4)
+        # IoUNet
+        # self.iou_feat = self.iou_head.get_iou_feat(self.xf)
+        # outputs = self.iou_head.predict_iou(self.iou_modulation, self.iou_feat, output_boxes) / 2 + 0.5
+
         # IoU_head
         feat1, feat2 = self.iou_head.get_iou_feat([self.x['layer2'], self.x['layer3']])
         self.iou_feat = [feat1.clone(), feat2.clone()]

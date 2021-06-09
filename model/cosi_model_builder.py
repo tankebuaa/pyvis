@@ -30,7 +30,7 @@ class CoModelBuilder(BaseBuilder):
 
         self.ERASETH = 0.9
 
-    def forward(self, data):
+    def _forward(self, data):
         """
         only used in training
         """
@@ -41,7 +41,6 @@ class CoModelBuilder(BaseBuilder):
         label_loc_weight = data['label_loc_weight'].cuda()
         label_fc = data['label_fc'].cuda()
         label_fc_weight = data['label_fc_weight'].cuda()
-        label_fc_delta = data['label_fc_delta'].cuda()
 
         z = self.backbone(template)
         x = self.backbone(search)
@@ -81,6 +80,7 @@ class CoModelBuilder(BaseBuilder):
             Compute the matching activation map, refer as MAM
         """
         b, c, h, w = responses.size()
+        h = h.cuda()
         cls = cls.view(b, -1)
         _, maxi = torch.max(cls, dim=1)
         peaks = torch.stack([maxi % h, maxi / h], dim=1).float().cuda()
@@ -124,10 +124,6 @@ class CoModelBuilder(BaseBuilder):
         dw_cls_man, cls_man = self.man_head(self.fa_z, fa_x)
         response = cls_man.squeeze()
 
-        # get the location
-        ind = torch.argmax(response)
-        delta = torch.Tensor([[ind % response.shape[1] - response.shape[0] // 2,
-                               ind // response.shape[1] - response.shape[1] // 2]]).cuda()
         MAM = self.get_match_active_map(dw_cls_man, cls_man, fa_x)
         pos = torch.ge(MAM, self.ERASETH)
         mask = torch.ones(x.size(0), x.size(2), x.size(3)).cuda()
@@ -144,3 +140,27 @@ class CoModelBuilder(BaseBuilder):
             'loc': loc,
             'response': response,
         }
+
+    def forward(self, search): # flops_
+        """
+        only used in flops counting
+        """
+        template = torch.randn(1, 3, 127, 127).cuda()
+        z = self.backbone(template)
+        x = self.backbone(search)
+
+        zf_man = self.man_neck(z)
+        xf_man = self.man_neck(x)
+        dw_cls_man, cls_man = self.man_head(zf_man, xf_man)
+
+        MAM = self.get_match_active_map(dw_cls_man.detach(), cls_man, xf_man.detach())#2label_fc_delta
+        pos = torch.ge(MAM, self.ERASETH)
+        mask = torch.ones(x.size(0), x.size(2), x.size(3)).cuda()
+        mask[pos.data] = 0.0
+        mask = torch.unsqueeze(mask, dim=1)
+
+        zf = self.corpn_neck(z)
+        xf = self.corpn_neck(x)
+        co_xf = xf * mask
+        cls_rpn1, cls_rpn2, loc = self.corpn_head(zf, xf, co_xf)
+        return cls_rpn1, cls_rpn2, loc

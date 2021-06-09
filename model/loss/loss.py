@@ -17,6 +17,7 @@ def get_cls_loss(pred, label, select):
     label = torch.index_select(label, 0, select)
     return F.nll_loss(pred, label)
 
+
 def pos_cross_entropy_loss(pred, label):
     pred = log_softmax(pred)
     pred = pred.view(-1, 2)
@@ -25,8 +26,9 @@ def pos_cross_entropy_loss(pred, label):
     loss_pos = get_cls_loss(pred, label, pos)
     return loss_pos
 
+
 def select_cross_entropy_loss(pred, label):
-    pred =log_softmax(pred)
+    pred = log_softmax(pred)
     pred = pred.view(-1, 2)
     label = label.view(-1)
     pos = label.data.eq(1).nonzero().squeeze().cuda()
@@ -46,4 +48,4 @@ def weight_l2_loss(pred_iou, label_iou, loss_weight):
     diff = (pred_iou - label_iou).pow(2)
     diff = diff.sum(dim=1)
     loss = diff * loss_weight.squeeze()
-    return loss.sum().div(b*n)
+    return loss.sum().div(b * n)

@@ -185,8 +185,8 @@ class SSFAugument:
         # crop the patch
         expand = output_size / size
         crop_bbox = [ncx - expand * L / 2, ncy - expand * L / 2, ncx + expand * L / 2, ncy + expand * L / 2]
-        avg_chans = np.mean(image, axis=(0, 1))
-        image = self._crop_roi(image, crop_bbox, output_size, padding=avg_chans)
+        # avg_chans = np.mean(image, axis=(0, 1))
+        image = self._crop_roi(image, crop_bbox, output_size)#, padding=avg_chans)
         # ground truth box in cropped image
         gcx, gcy = output_size / 2 - sx * scale, output_size / 2 - sy * scale
         gw, gh = w / scale_x * scale, h / scale_y * scale
@@ -202,7 +202,7 @@ class SSFAugument:
         mapping = np.array([[a, 0, c],
                             [0, b, d]]).astype(np.float)
         crop = cv2.warpAffine(image, mapping, (out_sz, out_sz),
-                              borderMode=cv2.BORDER_CONSTANT,
+                              borderMode=cv2.BORDER_CONSTANT, # BORDER_REPLICATE
                               borderValue=padding)
         return crop
 

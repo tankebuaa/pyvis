@@ -6,10 +6,9 @@ import cv2
 import torch
 import torch.nn.functional as F
 import model.backbone.resnet_atrous as res_atr
-import model.backbone.resnet as res
 from model.neck import NeckAllLayer
 from model.head import IAMFHead
-from model.loss import select_cross_entropy_loss, select_iou_loss, sigmoid_focal_loss
+from model.loss import select_cross_entropy_loss, select_iou_loss#, sigmoid_focal_loss
 from model.base_builder import BaseBuilder
 
 

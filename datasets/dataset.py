@@ -439,3 +439,149 @@ class SapDataset(Dataset):
             img = img[:, :, ::-1]
             # cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         return img
+
+
+class SslDataset(Dataset):
+    """ sample in self-supervised manner"""
+
+    def __init__(self, datasets, p_datasets=None, samples_per_epoch=None, train=True):
+        super(SslDataset, self).__init__()
+        self.train = train
+        self.sample_size = 144
+        self.exemplar_size = 144
+        self.search_size = 288
+
+        self.datasets = datasets
+        if samples_per_epoch is not None:
+            self.samples_per_epoch = samples_per_epoch
+        else:
+            self.samples_per_epoch = sum([len(d) for d in self.datasets])
+        # If p not provided, sample uniformly from all videos
+        if p_datasets is None:
+            p_datasets = [len(d) for d in self.datasets]
+        p_total = sum(p_datasets)  # Normalize
+        self.p_datasets = [x / p_total for x in p_datasets]
+
+        self.template_aumentation = SSFAugument(shift=4, scale=0.05, flip=0.0)
+        self.search_aumentation = SSFAugument(shift=15 * 8, scale=0.18, flip=0.05 if train else 0.0)#14
+        imagenet_mean_std = [[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]]
+        self.transform_train = T.Compose([
+            T.ToPILImage(),
+            T.RandomApply([T.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.0, hue=0.0)], p=0.2),
+            T.RandomGrayscale(p=0.1),
+            T.RandomApply([GaussianBlur(kernel_size=self.search_size // 20 * 2 + 1, sigma=(0.1, 2.0))], p=0.1),
+            T.ToTensor(),
+            T.Normalize(*imagenet_mean_std)
+        ])
+        self.transform_val = T.Compose([
+            T.ToPILImage(),
+            T.ToTensor(),
+            T.Normalize(*imagenet_mean_std)
+        ])
+        # TODO: label
+        # self.point_target = LocLabel(stride=32, size=7, offset=39.5, center_sampling_radius=0.6)
+        # self.tl_point_target = LocLabel(stride=16, size=17, offset=39.5, center_sampling_radius=0.6)
+        self.point_target = LocLabel(stride=8, size=31, offset=40, center_sampling_radius=0.6)
+
+    def __getitem__(self, index):
+        # Select a dataset
+        dataset = random.choices(self.datasets, self.p_datasets)[0]
+        index = random.randint(0, len(dataset)-1)
+
+        if self.train:
+            image, anno = dataset[index]  # dataset.imgs[index]
+            # TODO: augument base image, selective search to obtain box?
+            # tic = cv2.getTickCount()
+            base_img = cv2.imread(image)  # bgr
+            box = anno  # self.get_proposal(base_img) # box->[x,y,w,h]
+            # toc = cv2.getTickCount()-tic
+            # print(1000 * toc / cv2.getTickFrequency())
+            bimg, bbox = self.crop_patch(base_img.copy(), box)
+            template, tbox, _ = self.template_aumentation(bimg, bbox, self.exemplar_size,
+                                                          self.exemplar_size, mode='padding') # padding
+            search, sbox, flip = self.search_aumentation(base_img, box, self.exemplar_size,
+                                                         self.search_size, mode='padding') # padding
+            template = self.transform_train(template[:, :, ::-1])
+            search = self.transform_train(search[:, :, ::-1])
+        else:
+            tp, sr = dataset.get_positive_pair(index)
+            template_image = cv2.imread(tp[0])  # bgr
+            search_image = cv2.imread(sr[0])  # bgr
+            template, tbox, _ = self.template_aumentation(template_image, tp[1], self.exemplar_size, self.exemplar_size)
+            search, sbox, flip = self.search_aumentation(search_image, sr[1], self.exemplar_size, self.search_size)
+            template = self.transform_val(template[:, :, ::-1])
+            search = self.transform_val(search[:, :, ::-1])
+
+        cls_label, reg_label = self.point_target(sbox)
+        # self.show_img(self.imdenormalize(template), "template", tbox)
+        # self.show_img(self.imdenormalize(search), "search", sbox)
+        return {'template': template,
+                'search': search,
+                'template_box': np.array(tbox).astype(np.float32),
+                'search_box': np.array(sbox).astype(np.float32) / self.search_size,
+                'flip_label': flip,
+                'cls_label': cls_label}
+
+    def crop_patch(self, image, bbox):
+        # random the pixels
+        im_h, im_w = image.shape[:2]
+        x, y, w, h = bbox
+        w = im_w - x if im_w < x + w else w
+        h = im_h - y if im_h < y + h else h
+        cx = x + w // 2
+        cy = y + h // 2
+        sx = round(random.random() * (im_w - w)/2 + w/2)
+        sy = round(random.random() * (im_h - h)/2 + h/2)
+        tmp = image[cy-h//2:cy+h//2, cx-w//2:cx+w//2, :].copy()
+        image[cy-h//2:cy+h//2, cx-w//2:cx+w//2, :] = 0
+        image[sy-h//2:sy+h//2, sx-w//2:sx+w//2, :] = tmp
+        bbox = [sx - w // 2, sy -h // 2, w, h]
+        return image, bbox
+
+    @staticmethod
+    def random():
+        return random.random() * 2 - 1.0
+
+    def __len__(self):
+        return self.samples_per_epoch
+
+    def get_proposal(self, image):
+        sse = cv2.ximgproc.segmentation.createSelectiveSearchSegmentation()
+        newHeight = self.sample_size
+        scale = self.sample_size / image.shape[0]
+        newWidth = int(image.shape[1] * scale)
+        img = cv2.resize(image, (newWidth, newHeight), interpolation=cv2.INTER_NEAREST)
+        sse.setBaseImage(img)
+        sse.switchToSingleStrategy()
+        rects = sse.process()
+        valid_rects = rects[(rects[:, 0] > 3) & (rects[:, 1] > 3) &
+                            (rects[:, 0] + rects[:, 2] < newWidth - 3) &
+                            (rects[:, 1] + rects[:, 3] < newHeight - 3) &
+                            (rects[:, 2] > newWidth / 8) & (rects[:, 2] < newWidth / 2) &
+                            (rects[:, 3] > newHeight / 8) & (rects[:, 3] < newHeight / 2)]
+        if valid_rects.shape[0] > 0:
+            index = random.randint(0, valid_rects.shape[0]-1)
+        else:
+            index = 0
+            valid_rects = np.array([[37, 37, 37, 37]])
+        # select one rect
+        box = valid_rects[index, :] / scale
+        return box.astype(int)
+
+    def show_img(self, image, title="test", box=None):
+        cv2.namedWindow(title)
+        if box is not None:
+            x1, y1, x2, y2 = box
+            image = cv2.rectangle(image.copy().astype(np.uint8), (x1, y1), (x2, y2), (0, 255, 0), 1, cv2.LINE_AA)
+        cv2.imshow(title, image)
+        cv2.waitKey(0)
+        cv2.destroyWindow(title)
+
+    def imdenormalize(self, img, to_bgr=True):
+        img = img.numpy().transpose((1,2,0))
+        mean = [0.485, 0.456, 0.406]   # [123.675, 116.28, 103.53]
+        std = [0.229, 0.224, 0.225]    # [58.395, 57.12, 57.375]
+        img = ((img * std) + mean)
+        if to_bgr:
+            img = img[:, :, ::-1] * 255
+        return img

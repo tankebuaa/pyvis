@@ -327,10 +327,10 @@ class EfficientNet(nn.Module):
                 drop_connect_rate *= float(idx) / len(self._blocks)  # scale drop connect_rate
             x = block(x, drop_connect_rate=drop_connect_rate)
 
-        # Head
+        # # Head
         # x = self._swish(self._bn1(self._conv_head(x)))
-
-        # Pooling and final linear layer
+        #
+        # # Pooling and final linear layer
         # x = self._avg_pooling(x)
         # if self._global_params.include_top:
         #     x = x.flatten(start_dim=1)

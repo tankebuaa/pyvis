@@ -229,6 +229,21 @@ class ResNet(Backbone):
 
         return nn.Sequential(*layers)
 
+    def activate_training_layers(self, mode=True):
+        training_layers = ['layer' + str(layer)for layer in self.used_layers]
+        if mode:
+            for layer in training_layers:
+                for p in getattr(self, layer).parameters():
+                    p.requires_grad_(True)
+            for layer in training_layers:
+                getattr(self, layer).train()
+        else:
+            for layer in training_layers:
+                for p in getattr(self, layer).parameters():
+                    p.requires_grad_(False)
+            for layer in training_layers:
+                getattr(self, layer).eval()
+
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)

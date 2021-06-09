@@ -86,7 +86,8 @@ class BaSiamIoUTracker(BaseTracker):
             model_sz: exemplar size
             s_z: original size
         """
-        im = numpy_to_torch(image).cuda()
+        im_cuda = torch.from_numpy(image).cuda()
+        im = im_cuda.float().permute(2, 0, 1).unsqueeze(0)
         pos = torch.Tensor([pos[1], pos[0]]).round()
         posl = pos.long().clone()
 
@@ -105,7 +106,7 @@ class BaSiamIoUTracker(BaseTracker):
         # Do downsampling
         if df > 1:
             os = posl % df  # offset
-            posl = (posl - os) / df  # new position
+            posl = (posl - os) // df  # new position
             im2 = im[..., os[0].item()::df, os[1].item()::df]  # downsample
         else:
             im2 = im
@@ -114,12 +115,11 @@ class BaSiamIoUTracker(BaseTracker):
         szl = torch.max(sz.round(), torch.Tensor([2])).long()
 
         # Extract top and bottom coordinates
-        tl = posl - (szl - 1) / 2
-        br = posl + szl / 2 + 1
+        tl = posl - (szl - 1) // 2
+        br = posl + szl // 2 + 1
 
-        im_patch = F.pad(im2,
-                         (-tl[1].item(), br[1].item() - im2.shape[3], -tl[0].item(), br[0].item() - im2.shape[2]),
-                         'replicate')
+        im_patch = F.pad(im2, [-tl[1].item(), br[1].item() - im2.shape[3],
+                               -tl[0].item(), br[0].item() - im2.shape[2]], 'replicate')
         # Resample
         im_patch = F.interpolate(im_patch, output_sz.long().tolist(), mode='bilinear')
         return preprocrss(im_patch, **self.img_norm_cfg)
