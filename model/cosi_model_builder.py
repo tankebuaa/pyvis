@@ -30,7 +30,7 @@ class CoModelBuilder(BaseBuilder):
 
         self.ERASETH = 0.9
 
-    def _forward(self, data):
+    def forward(self, data):
         """
         only used in training
         """
@@ -79,8 +79,7 @@ class CoModelBuilder(BaseBuilder):
         """
             Compute the matching activation map, refer as MAM
         """
-        b, c, h, w = responses.size()
-        h = h.cuda()
+        b, c, h, w = responses.shape
         cls = cls.view(b, -1)
         _, maxi = torch.max(cls, dim=1)
         peaks = torch.stack([maxi % h, maxi / h], dim=1).float().cuda()
@@ -141,7 +140,7 @@ class CoModelBuilder(BaseBuilder):
             'response': response,
         }
 
-    def forward(self, search): # flops_
+    def flops_forward(self, search): # flops_
         """
         only used in flops counting
         """

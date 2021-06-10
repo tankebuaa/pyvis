@@ -7,6 +7,14 @@ import cv2
 from glob import glob
 import numpy as np
 from utils.load_text import load_text
+from fvcore.nn import FlopCountAnalysis
+
+# from torchvision.models import resnet50
+# from thop import profile
+#
+# model = resnet50()
+# input = torch.randn(1, 3, 224, 224)
+# flops, params = profile(model, inputs=(input, ))
 
 
 def get_frames(video_name):
@@ -40,16 +48,23 @@ def get_frames(video_name):
 
 def main():
     # config
-    os.environ['CUDA_VISIBLE_DEVICES'] = '7,'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '5,'
     select = False  # True
-    video = '../../../../Datasets/OTB/Basketball'
+    video = os.path.join(os.path.dirname((os.path.abspath(__file__))),
+                         '../../../../Datasets/OTB/Basketball')
 
     # create model
-    model = CoModelBuilder(backbone='efficientnetb0').cuda()
+    model = CoModelBuilder().cuda() # backbone='efficientnetb0'
 
     # load model
-    model = load_pretrain(model, './checkpoints/model_e13.pth')
+    model = load_pretrain(model, os.path.join(os.path.dirname((os.path.abspath(__file__))),
+                                              './checkpoints/resnet/model_e19.pth'))
     torch.set_grad_enabled(False)
+
+    # input = (torch.randn(1, 3, 255, 255).cuda(),)
+    # flops = FlopCountAnalysis(model, input)
+    # print(flops.total())
+    # print(sum(p.numel() for p in model.parameters()))
 
     # build tracker
     tracker = CoSiamRPNTracker(model)
@@ -75,7 +90,8 @@ def main():
                 except:
                     exit()
             else:
-                gt = load_text(os.path.join('../../../../Datasets',  # /got10k
+                gt = load_text(os.path.join(os.path.dirname((os.path.abspath(__file__))),
+                                            '../../../../Datasets',  # /got10k
                                             video.split('/')[-2],
                                             video.split('/')[-1],
                                             'groundtruth_rect.txt'),  #
