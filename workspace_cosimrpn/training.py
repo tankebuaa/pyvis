@@ -14,7 +14,6 @@ from model.cosi_model_builder import CoModelBuilder
 from datasets import SrtDataset, ImagenetVID, Got10k, MSCOCO, TrackingNet, LaSOT
 from torch.utils.tensorboard import SummaryWriter
 from utils.warmup_scheduler import GradualWarmupScheduler
-from datasets.sotdata import *
 
 
 def run(rank, size, seed=None):
