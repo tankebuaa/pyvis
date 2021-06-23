@@ -148,22 +148,3 @@ class ImagenetVID(object):
             frame = random.randint(start, end-1)
         image_path, image_anno = self.get_image_anno(video, frame, frame - start)
         return image_path, image_anno
-
-
-
-if __name__ == "__main__":
-    otb_dataset = ImagenetVID(name='train',
-                      root='../../Datasets/ILSVRC2015/Data/VID',
-                      anno='../../Datasets/ILSVRC2015/Annotations/VID',
-                      frame_range=50)
-    out = otb_dataset[0]
-    out1 = otb_dataset.get_random_target()
-    out2 = otb_dataset.get_positive_pair(30)
-    for i in range(1000000000):
-        print(i)
-        out1 = otb_dataset.get_random_target()
-        out2 = otb_dataset.get_positive_pair(30)
-        if out1[1][2] < 4 or out1[1][3] < 4:
-            print(out1[1])
-    print(len(otb_dataset))
-    print('done!')

@@ -110,20 +110,3 @@ class LaSOT(object):
 
         return self.get_image_anno(video, video_label, template_frame), \
             self.get_image_anno(video, video_label, search_frame)
-
-
-if __name__ == "__main__":
-    otb_dataset = LaSOT(name='LaSOT',
-                      root='../../Datasets/',
-                      anno='../../Datasets/',
-                      frame_range=50)
-    out1 = otb_dataset.get_random_target()
-    out2 = otb_dataset.get_positive_pair(30)
-    print('test')
-    for i in range(1000000000):
-        out1 = otb_dataset.get_random_target()
-        out2 = otb_dataset.get_positive_pair(30)
-        if out1[1][2] < 4 or out1[1][3] < 4:
-            print(out1[1])
-    print(len(otb_dataset))
-    print('done!')

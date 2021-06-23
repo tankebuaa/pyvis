@@ -86,19 +86,4 @@ class MSCOCO(object):
 
     def __len__(self):
         return self.num
-
-
-if __name__ == "__main__":
-    otb_dataset = MSCOCO(name='train2017',
-                         root='../../Datasets/coco/images',
-                         anno='../../Datasets/coco/annotations')
-    out1 = otb_dataset.get_random_target()
-    out2 = otb_dataset.get_positive_pair(30)
-    for i in range(1000000000):
-        print(i)
-        out1 = otb_dataset.get_random_target()
-        out2 = otb_dataset.get_positive_pair(30)
-        if out1[1][2] < 4 or out1[1][3] < 4:
-            print(out1[1])
-    print(len(otb_dataset))
-    print('done!')
+        

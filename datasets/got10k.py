@@ -115,26 +115,3 @@ class Got10k(object):
 
         return self.get_image_anno(video, video_label, template_frame), \
             self.get_image_anno(video, video_label, search_frame)
-
-
-if __name__ == "__main__":
-    otb_dataset = Got10k(name='train',
-                      root='../../Datasets/got10k/',
-                      anno='../../Datasets/got10k/',
-                      frame_range=50)
-
-    otb_dataset = Got10k(name='test',
-                          root='../../Datasets/got10k/',
-                          anno='got10k-toolkit-master/got10k/',
-                          frame_range=50)
-
-    out1 = otb_dataset.get_random_target()
-    out2 = otb_dataset.get_positive_pair(30)
-    print('test')
-    for i in range(1000000000):
-        out1 = otb_dataset.get_random_target()
-        out2 = otb_dataset.get_positive_pair(i%180)
-        if out1[1][2] < 4 or out1[1][3] < 4:
-            print(out1[1])
-    print(len(otb_dataset))
-    print('done!')
