@@ -3,12 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from model.base_builder import BaseBuilder
 import model.backbone.resnet as res
-import model.backbone.googlenet as google
-from model.neck import FpnLayer, PAFPN
-from model.head import BasiHead, ClsHead, RegHead, xcorr_fast, xcorr_depthwise
+import model.backbone.alexnet as alex
+from model.neck import FpnLayer
+from model.head import ClsHead, RegHead, xcorr_fast, xcorr_depthwise
 from model.loss.loss import weight_l2_loss
-from model.loss.iou_loss import linear_iou, ciou, diou
-from model.head.iou_net import AtomIoUNet, IoUNet
+from model.loss.iou_loss import linear_iou
+from model.head.iou_net import AtomIoUNet
 from config import basi_cfg as cfg
 
 
@@ -24,34 +24,37 @@ class WeightLoss(nn.Module):
 
 
 class BsiModelBuilder(BaseBuilder):
-    def __init__(self):
+    def __init__(self, backbone='resnet50'):
         super(BsiModelBuilder, self).__init__()
-        # build resnet backbone, necks and heads
-        layers= ['conv1', 'bn1', 'relu', 'maxpool', 'layer1']
-        self.backbone = res.resnet50(output_layers=['layer2', 'layer3'], pretrained=True,
-                                     frozen_layers=layers, activate_layers=['layer2', 'layer3'])  # 512, 1024, 256
 
-        self.cls_neck = FpnLayer(512, 1024, 256)
-        self.reg_neck = FpnLayer(512, 1024, 256)
+        if backbone is 'resnet50':
+            # build resnet backbone, necks and heads
+            layers= ['conv1', 'bn1', 'relu', 'maxpool', 'layer1']
+            self.backbone = res.resnet50(output_layers=['layer2', 'layer3'], pretrained=True,
+                                         frozen_layers=layers, activate_layers=['layer2', 'layer3'])  # 512, 1024, 256
 
-        self.cls_head = ClsHead(256)
-        self.reg_head = RegHead(256)
+            self.cls_neck = FpnLayer(512, 1024, 256)
+            self.reg_neck = FpnLayer(512, 1024, 256)
 
-        # # build google lenet, neck and head
-        # layer1 = ['conv1', 'maxpool1', 'conv2', 'conv3']
-        # layer2 = ['maxpool2', 'inception3a', 'inception3b']
-        # layer3 = ['maxpool3', 'inception4a', 'inception4b', 'inception4c', 'inception4d', 'inception4e']
-        # self.backbone = google.LeNet(output_layers=['layer2', 'layer3'], pretrained=True,
-        #                              frozen_layers=layer1, activate_layers=layer2+layer3)  # 480, 832, 256
-        # self.cls_neck = FpnLayer(480, 832, 256)
-        # self.reg_neck = FpnLayer(480, 832, 256)
-        #
-        # self.cls_head = ClsHead(256)
-        # self.reg_head = ClsHead(256)
+            self.cls_head = ClsHead(256)
+            self.reg_head = RegHead(256)
 
-        # self.iou_head = IoUNet(input_dim=512, pred_input_dim=256, pred_inter_dim=256)
-        self.iou_head = AtomIoUNet(input_dim=(512, 1024), pred_input_dim=(256, 256),
-                                   pred_inter_dim=(256,256))
+            self.iou_head = AtomIoUNet(input_dim=(512, 1024), pred_input_dim=(256, 256),
+                                       pred_inter_dim=(256, 256))
+        elif backbone is 'alexnet':
+            # build google lenet, neck and head
+            self.backbone = alex.alexnet(output_layers=['layer2', 'layer3'], pretrained=True,
+                                         frozen_layers=['layer1'], activate_layers=['layer2', 'layer3'])  #192, 256
+
+            self.cls_neck = FpnLayer(192, 256, 256, center_size=13)
+            self.reg_neck = FpnLayer(192, 256, 256, center_size=13)
+
+            self.cls_head = ClsHead(256)
+            self.reg_head = RegHead(256)
+
+            self.iou_head = AtomIoUNet(input_dim=(192, 256), pred_input_dim=(256, 256),
+                                       pred_inter_dim=(256, 256))
+
         # multi-task weight
         self.lossweights = WeightLoss(weight=1.0, factor=torch.tensor([1,1,2],dtype=torch.float32))
 
@@ -100,11 +103,13 @@ class BsiModelBuilder(BaseBuilder):
         if num_pos > 0:
             loss_reg = linear_iou(pos_reg_pred, pos_reg_label)  # linear_iou   ciou
         else:
-            loss_reg = pos_reg_pred.sum()
+            print("all negative!")
+            loss_reg = 0.0
 
         loss_iou = weight_l2_loss(iou_pred.reshape(-1, iou_pred.shape[-1]), iou_label, weight_iou)
         loss = self.lossweights(torch.cat([loss_cls.unsqueeze(0), loss_reg.unsqueeze(0), loss_iou.unsqueeze(0)]))
-        # loss = loss_cls + loss_reg + loss_iou
+        # loss = loss_cls + 3 * loss_reg + 2 * loss_iou
+
 
         outputs = {'total_loss': loss,
                    'cls_loss': loss_cls,
@@ -125,8 +130,9 @@ class BsiModelBuilder(BaseBuilder):
         #     .reshape(1, 1, self.zf_cls.size(2), self.zf_cls.size(3))
         if cfg.MASK:
             L = zf_cls.shape[-1]
-            mh = min(torch.round(bbox[0,3] / 16).int() * 2, L)
-            mw = min(torch.round(bbox[0,2] / 16).int() * 2, L)
+            ex = L % 2
+            mh = min(torch.round(bbox[0,3] / 16).int() * 2 + ex, L)
+            mw = min(torch.round(bbox[0,2] / 16).int() * 2 + ex, L)
             ph = (L - mh) // 2
             pw = (L - mw) // 2
             padding = torch.nn.ZeroPad2d(padding=(pw, pw, ph, ph))

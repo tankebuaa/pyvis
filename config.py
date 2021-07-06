@@ -82,6 +82,7 @@ class BaSiamIoUTrackerConfig(object):
         self.DEBUG = 3
         # general elements
         self.name = 'BaSiamIoU'
+        self.backbone_type = 'alexnet'  # choose one from ['alexnet', 'resnet50']
         self.SCORE_SIZE = 23
         self.STRIDE = 8
         self.exemplar_area_factor = 5.0 / 2
@@ -91,9 +92,9 @@ class BaSiamIoUTrackerConfig(object):
         self.MASK = True
         # refine module
         self.REFINE = True
-        self.BASE_BOX = False
+        self.BASE_BOX = True
         self.STEP = 0.025
-        self.TOPK = 3
+        self.TOPK = 1
         # Background-aware salient map
         self.ERA_TH = 0.6  # *hp
         self.ALPHA = 0.3  # *hp
@@ -104,7 +105,11 @@ class BaSiamIoUTrackerConfig(object):
         self.WINDOW_INFLUENCE = 0.36
         self.SCALE_LR = 0.25
         # self.CHECK_FAILURE = False
+        
         #                                                   $cw                $wi   $sl
+        # AlexNet:
+        # OTB100:  True, True, True,  0.025, 1, 0.60, 0.30, 0.35, 0.10, 0.30, 0.36, 0.25
+        # ResNet50：
         # OTB100:  True, True, True,  0.025, 1, 0.60, 0.30, 0.35, 0.10, 0.30, 0.36, 0.25
         # UAV123:  True, True, True,  0.05,  1, 0.60, 0.30, 0.35, 0.10, 0.30, 0.31, 0.25
         # GOT10k:  True, True, False, 0.025, 1, 0.60, 0.30, 0.20, 0.10, 0.30, 0.41, 0.80

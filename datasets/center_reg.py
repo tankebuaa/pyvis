@@ -88,8 +88,8 @@ class CenterReg:
         if neg_sample:
             cls[pos, 0] = 0
         else:
-            cls[pos, 0] = labels[pos, 0] # 1
-        cls[neg, 0] = labels[neg, 0] # 0
+            cls[pos, 0] = 1 # labels[pos, 0]
+        cls[neg, 0] = 0 # labels[neg, 0]
         cls_weights[pos] = 1
         cls_weights[neg] = 1
 
